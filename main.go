@@ -69,21 +69,20 @@ func main() {
 		apiToken = string(fileData)
 	}
 	if syslogTag == "" {
-		// we dont need to error out here, but we do need to set a default if the variable isnt defined
+		// we don't need to error out here, but we do need to set a default if the variable isn't defined
 		syslogTag = "OSE"
 	}
 	if ignoreSSL == "" {
-		// we dont need to error out here, but we do need to set a default if the variable isnt defined
+		// we don't need to error out here, but we do need to set a default if the variable isn't defined
 		ignoreSSL = "FALSE"
 	}
 	if debugFlag == "" {
-		// we dont need to error out here, but we do need to set a default if the variable isnt defined
+		// we don't need to error out here, but we do need to set a default if the variable isn't defined
 		debugFlag = "FALSE"
 	}
 	if (syslogProto == "") || (syslogProto == "tcp") || (syslogProto == "udp") {
-		// we dont need to error out here, but we do need to set a default if the variable isnt defined
+		// we don't need to error out here, but we do need to set a default if the variable isn't defined
 		if syslogProto == "" {
-			log.Print("SYSLOG_PROTO not set, defaulting to udp")
 			syslogProto = "udp"
 		} else {
 			log.Printf("Will use %s for syslog protocol", syslogProto)
@@ -138,12 +137,13 @@ func main() {
 			continue
 		}
 
+		streamStart := time.Now()
 		reader := bufio.NewReader(resp.Body)
 
 		for {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
-				log.Println("## Error reading from response stream.", err)
+				log.Println("## Error reading from response stream.", err, line)
 				resp.Body.Close()
 				break
 			}
@@ -156,11 +156,13 @@ func main() {
 				break
 			}
 
-			fmt.Printf("%v | Project: %v | Name: %v | Kind: %v | Reason: %v | Message: %v\n",
-				event.Event.LastTimestamp,
-				event.Event.Namespace, event.Event.Name,
-				event.Event.Kind, event.Event.Reason, event.Event.Message)
+			// Kubernetes sends all data from ETCD, we only want the logs since the stream started
+			if event.Event.LastTimestamp.Time.After(streamStart) {
+				fmt.Printf("%v | Project: %v | Name: %v | Kind: %v | Reason: %v | Message: %v\n",
+					event.Event.LastTimestamp.Format(time.RFC3339),
+					event.Event.Namespace, event.Event.InvolvedObject.Name,
+					event.Event.Kind, event.Event.Reason, event.Event.Message)
+			}
 		}
 	}
-
 }
