@@ -36,6 +36,7 @@ func main() {
 	syslogTag := strings.ToUpper(os.Getenv("SYSLOG_TAG"))
 	ignoreSSL := strings.ToUpper(os.Getenv("IGNORE_SSL"))
 	debugFlag := strings.ToUpper(os.Getenv("DEBUG"))
+	var lastResourceVersion string
 
 	// enable signal trapping
 	go func() {
@@ -122,13 +123,19 @@ func main() {
 	} else {
 		client = http.Client{}
 	}
-	req, err := http.NewRequest("GET", apiAddr+"/api/v1/events?watch=true", nil)
-	if err != nil {
-		log.Fatal("## Error while opening connection to openshift api", err)
-	}
-	req.Header.Add("Authorization", "Bearer "+apiToken)
 
 	for {
+		var requestString string
+		if lastResourceVersion == "" {
+			requestString = apiAddr + "/api/v1/events?watch=true"
+		} else {
+			requestString = apiAddr + "/api/v1/events?watch=true&resourceVersion=" + lastResourceVersion
+		}
+		req, err := http.NewRequest("GET", requestString, nil)
+		if err != nil {
+			log.Fatal("## Error while opening connection to openshift api", err)
+		}
+		req.Header.Add("Authorization", "Bearer "+apiToken)
 		resp, err := client.Do(req)
 
 		if err != nil {
@@ -155,6 +162,8 @@ func main() {
 				resp.Body.Close()
 				break
 			}
+
+			lastResourceVersion = event.Event.ResourceVersion
 
 			// Kubernetes sends all data from ETCD, we only want the logs since the stream started
 			if event.Event.LastTimestamp.Time.After(streamStart) {
